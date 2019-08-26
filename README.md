@@ -14,8 +14,15 @@ This repo should only contain:
 * `help.html` - `html` that's a "help" page, accessed from within the app.
 * `about.html` - information about the app, accessed from within the app.
 
-Calls to `MetaboAnalystR` write out a bunch of intermediary files, so these get `.gitignored`. 
+Calls to `MetaboAnalystR` write out a bunch of intermediary files, so these get `.gitignored`.
 
+### Methodological Details
+
+lorem ipsum
+
+### Technical Details
+
+The app makes `POST` calls to `iPath3` to generate `svg` files.
 
 ### Requirements for Local Installation
 
