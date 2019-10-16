@@ -22,6 +22,7 @@ lorem ipsum
 
 ### To Do
 
+ - split main.R into ui.R and server.R
  - volcano plots, heatmaps, boxplots?
  - MetaboAnalystR pathway enrichment module?
  - Add species filter
