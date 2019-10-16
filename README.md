@@ -6,7 +6,7 @@ Given a *curated* input `csv` file of experimental data, does multiple t-tests t
 
 ### Files
 
-This repo should only contain:
+`.gitignore` has been set up such that this repo will only contain:
 
 * `README.md` - This readme file.
 * `sample-data.csv` - A `csv` file of example data.
@@ -19,6 +19,22 @@ Calls to `MetaboAnalystR` write out a bunch of intermediary files, so these get 
 ### Methodological Details
 
 lorem ipsum
+
+### To Do
+
+ - volcano plots, heatmaps, boxplots?
+ - MetaboAnalystR pathway enrichment module?
+ - Add species filter
+ - Download all files button
+ - sort significantly changing metabs by FC
+ - Dropdown: which group is the denominator
+ - ipath needs legend
+ - add ipath:coverage and ipath:DE metabs
+ - include ANOVA?
+ - Check DE logic - is p-value input necessary, or only q-value?
+ - Add command history
+ - make test data and test suite
+ - Allow name_map.csv download
 
 ### Technical Details
 
@@ -40,7 +56,7 @@ ggplot2
 MetaboAnalystR
 KEGGREST
 tidyverse
-ggfortify
+ggfortify # for pca
 httr
 XML
 DT
