@@ -9,17 +9,24 @@ source("/Users/don/Documents/pathway-shinyapp/helper-func.R")
 #https://stackoverflow.com/questions/40152857/how-to-dynamically-populate-dropdown-box-choices-in-shiny-dashboard
 #https://stackoverflow.com/questions/34555548/adding-a-download-export-button-to-r-shinydashboard
 
-dash.sidebar <- dashboardSidebar(
+dash.sidebar <- dashboardSidebar(width = 320,
     sidebarMenu(id="sidebarmenu", startExpanded=T,
         menuItem("Home", tabName="main", icon = icon("home")),
         fileInput("file1", "Upload CSV File",
                   accept = c("text/csv", "text/comma-separated-values,text/plain",".csv")),
         sliderInput("fdr_num", "False Discovery Rate", min=0, max=1.0, step=0.01, value=0.3, width = '95%'),
+        selectizeInput('grp_numerator', 'Select group1 (FC numerator)', ""),
+        selectizeInput('grp_denominator', 'Select group2 (FC denominator)', ""),
+        textInput("species_code", "KEGG 3-letter Species Code"),
+        
         menuItem("Advanced Options", tabName="options", 
+                 sliderInput("alpha", "Alpha for t-tests", min=0, max=1.0, step=0.01, value=0.01, width = '95%'),
+                 sliderInput("fc", "Fold Change Threshold", min=0, max=1.0, step=0.05, value=0.2, width = '95%'),
                  checkboxInput("median_normalization","Use median normalization",TRUE),
                  checkboxInput("logtransform","Use log2 transform",TRUE),
                  checkboxInput("autoscale","Use Autoscaling",TRUE)
                  ),
+        
         tags$hr(),
         menuItem("Help", tabName="help", icon = icon("info-circle")),
         menuItem("About", tabName="about", icon = icon("info-circle")),
@@ -34,15 +41,24 @@ dash.body <- dashboardBody(
             # ===== Analysis fluidRow =====
             fluidRow(
                 tabBox(
-                    width=12,
+                    width=8,
                     # The id lets us use input$tabset1 on the server to find the current tab
                     id = "tabset_plots2", height = "580px",
                     tabPanel("iPath: Coverage", 
-                             div(style = 'height:510px; width:800px; overflow-y: scroll; overflow-x: scroll; font-size:65%', 
-                                 htmlOutput("ipath") %>% withSpinner())),
+                             div(style = 'height:510px; overflow-y: scroll; overflow-x: scroll; font-size:75%', 
+                                 htmlOutput("ipath_coverage") %>% withSpinner())),
+                    tabPanel("iPath: Significant Metabolites", 
+                             div(style = 'height:510px; overflow-y: scroll; overflow-x: scroll; font-size:75%', 
+                                 htmlOutput("ipath_de_metabs") %>% withSpinner())),
                     tabPanel("Significantly Changing Metabolites", 
-                             div(style = 'height:510px; width:800px; overflow-y: scroll; overflow-x: scroll; font-size:65%', 
+                             div(style = 'height:510px; overflow-y: scroll; overflow-x: scroll; font-size:75%', 
                                  dataTableOutput("de_tbl") %>% withSpinner()))
+                    ),
+                box(width=4,
+                    title="Boxplot", height = "400px",
+                    selectizeInput('selected_colname', 'Select Metabolite', ""),
+                    div(style = 'height:330px; overflow-y: scroll; overflow-x: scroll', 
+                        plotOutput("single_boxplot") %>% withSpinner())
                     )
                 ),
             # ===== About Your Data fluidRow =====
@@ -54,9 +70,9 @@ dash.body <- dashboardBody(
                     tabPanel("Input Data", 
                              div(style = 'height:330px; width:500px; overflow-y: scroll; overflow-x: scroll; font-size:65%', 
                                  dataTableOutput("input_table") %>% withSpinner())),
-                    tabPanel("PCA", 
-                             div(style = 'height:330px; width:500px; overflow-y: scroll; overflow-x: scroll; font-size:65%', 
-                                 plotOutput("pca_plot") %>% withSpinner())),
+                    #tabPanel("PCA", 
+                    #         div(style = 'height:330px; width:500px; overflow-y: scroll; overflow-x: scroll; font-size:65%', 
+                    #             plotOutput("pca_plot") %>% withSpinner())),
                     tabPanel("Unidentified Compounds", 
                              div(style = 'height:330px; width:500px; overflow-y: scroll; overflow-x: scroll; font-size:65%', 
                                  dataTableOutput("unfound_table") %>% withSpinner()))
@@ -70,7 +86,7 @@ dash.body <- dashboardBody(
 
 # Define UI
 ui <- dashboardPage(
-    dashboardHeader(title="MS-MZ-Met-Metabo-Metabalyzer"),
+    dashboardHeader(titleWidth = 320, title="MS-MZ-Met-Metabo-Metabalyzer"),
     dash.sidebar,
     dash.body
 )
@@ -78,13 +94,75 @@ ui <- dashboardPage(
 
 # Define server logic
 server <- function(input, output, session) {
-
-    # Read user-uploaded csv as DT
+    # ========== DEF REACTIVES =========
+    # Reactive for DE metabs and ipath
+    data_tbl <- reactive({
+        req(input$file1)
+        req(input$grp_numerator)
+        req(input$grp_denominator)
+        tbl0 <- read_csv(input$file1$datapath)
+        tbl0 <- clean_and_transform_tibble(tbl0, log_bool=TRUE, z_transform_bool=FALSE)
+        tbl0 <- get_results_tibble(tbl0, 
+                                   input_alpha=0.01, 
+                                   grp_numerator = input$grp_numerator,
+                                   grp_denominator = input$grp_denominator,
+                                   input$fdr_num)
+        tbl0
+    })
+    
+    grp.name.vec <- reactive({
+        req(input$file1)
+        tbl0 <- read_csv(input$file1$datapath)
+        as.vector(unlist(tbl0[2]))
+    })
+    
+    outVar <- reactive({
+        req(input$file1)
+        tbl0 <- read_csv(input$file1$datapath)
+        sort(colnames(tbl0[3:ncol(tbl0)]))
+    })
+    
+    
+    # ========== DEF OBSERVES =========
+    # To update various selectizeInputs
+    observe({
+        updateSelectizeInput(session, "selected_colname",
+                             choices = outVar())
+    })
+    observe({
+        updateSelectizeInput(session, "grp_numerator",
+                             choices = grp.name.vec(), 
+                             selected = grp.name.vec()[1])
+    })
+    observe({
+        updateSelectizeInput(session, "grp_denominator",
+                             choices = grp.name.vec(), 
+                             selected = grp.name.vec()[2])
+    })
+    
+    # ========== DEF OUTPUTS =========
+    # Individual metab box plots: 
+    # dynamically update selectizeInput with sorted metab names
+    output$single_boxplot <- renderPlot({
+        req(input$file1)
+        tbl0 <- read_csv(input$file1$datapath)
+        colnames.to.keep <- c(colnames(tbl0[1:2]), input$selected_colname)
+        tbl_selected <- tbl0 %>% select(colnames.to.keep)
+        group.colname <- colnames(tbl0[2])
+        ggplot(tbl_selected, aes(x=!!sym(group.colname), y=!!sym(input$selected_colname))) + 
+            geom_boxplot() + 
+            geom_dotplot(binaxis='y')
+    })
+    # Dynamically update selectizeInputs with group names
+    
+    
+    # Display untransformed user input
     output$input_table <- renderDataTable({
         req(input$file1)
         DT::datatable(read_csv(input$file1$datapath), options = list(ordering = F, searching = T, pageLength=20))
     })
     
+    # KEGGless compounds
     output$unfound_table <- renderDataTable({
         req(input$file1)
         tbl0 <- read_csv(input$file1$datapath)
@@ -99,171 +177,31 @@ server <- function(input, output, session) {
         DT::datatable(unfound)
     })
     
-    # Show PCA
-    output$pca_plot <- renderPlot({
-        req(input$file1)
-        tbl0 <- read_csv(input$file1$datapath)
-        #DT::datatable(read_csv(input$file1$datapath), options = list(ordering = F, searching = T, pageLength=20))
-        
-        autoplot(prcomp(tbl0[,3:ncol(tbl0)]), data=tbl0, colour = "Group", label=T, label.size=3)
-    })
+    # PCA plot
+    #output$pca_plot <- renderPlot({
+    #    req(input$file1)
+    #    tbl0 <- read_csv(input$file1$datapath)
+    #    autoplot(prcomp(tbl0[,3:ncol(tbl0)]), 
+    #             data=tbl0, 
+    #             colour = !!sym(colnames(tbl0[2])), 
+    #             label=F)
+    #})
     
     # DE metabolites
     output$de_tbl <- renderDataTable({
-        
-        req(input$file1)
-        # Load data, specify some inputs
-        tbl0 <- read_csv(input$file1$datapath)
-        
-        group.name.col <- names(tbl0[,2])
-        groupnames <- as.vector(unlist(unique(tbl0[[group.name.col]])))
-        control.group.name <- "Plus" # name of denominator group. 
-        alpha <- input$fdr_num
-        #kegg_species_id <- "dme"
-        
-        #  ==================== START ==================== 
-        cnames <- colnames(tbl0)[3:length(colnames(tbl0))]
-        # Init vec of t.stats p-vals, and fold change of averages
-        # Compute t-stats
-        p.vals.ls <- vector(mode="numeric", length = length(cnames))
-        fc.ls <- vector(mode="numeric", length = length(cnames))
-        for (i in 1:length(cnames)) {
-            g1.vec <- as.vector(unlist(tbl0 %>% filter(!!sym(group.name.col)==groupnames[1]) %>% select(cnames[i])))
-            g2.vec <- as.vector(unlist(tbl0 %>% filter(!!sym(group.name.col)==groupnames[2]) %>% select(cnames[i])))
-            x <- t.test(g1.vec, g2.vec)
-            p.vals.ls[i] <- x$p.value
-            
-            mu1 <- mean(g1.vec)
-            mu2 <- mean(g2.vec)
-            fc.ls[i] <- mu1/mu2
-        }
-        names(p.vals.ls) <- colnames(tbl0)[3:length(colnames(tbl0))]
-        names(fc.ls) <- colnames(tbl0)[3:length(colnames(tbl0))]
-        
-        # adjust: BH correction
-        # pick out names where p < alpha
-        p.vals.ls <- p.adjust(p.vals.ls, method = "hochberg", n = length(p.vals.ls))
-        significant.metabs <- c()
-        for (nm in names(p.vals.ls)) {
-            if (p.vals.ls[[nm]] < alpha) {
-                significant.metabs <- c(significant.metabs, nm)
-            }
-        }
-        print(paste0(length(significant.metabs), " significant metabolites found at alpha = ", alpha))
-        
-        # Filter for significant metabs
-        p.vals.ls2 <- p.vals.ls[significant.metabs]
-        fc.ls2 <- fc.ls[significant.metabs]
-        
-        # Colour by FC
-        th.lower <- 0.8
-        th.upper <- 1.2
-        fc.colour.ls <- rep("#000000", length(significant.metabs))
-        names(fc.colour.ls) <- significant.metabs
-        for (i in 1:length(significant.metabs)) {
-            nm <- significant.metabs[i]
-            if (fc.ls[nm] <= th.lower) {
-                fc.colour.ls[i] <- "red" #crimson
-            }
-            if (fc.ls[nm] > th.upper) {
-                fc.colour.ls[i] <- "green" #forest green
-            }
-        }
-        fc.tbl <- tibble::enframe(fc.ls2) %>% rename("fc"=value, "Sample"=name)
-        p.val.tbl <- tibble::enframe(p.vals.ls2) %>% rename("FDR"=value, "Sample"=name)
-        
-        #  ==================== GET CPD IDS ==================== 
-        kegg.id.tbl <- lookup_chem_id(names(fc.ls2))
-        kegg.id.vec <- as.vector(unlist(kegg.id.tbl %>% select("KEGG")))
-        
-        tbl1 <- inner_join(fc.tbl, kegg.id.tbl, by="Sample")
-        tbl1 <- inner_join(tbl1, p.val.tbl, by="Sample") %>% select(Sample, fc, KEGG, FDR)
-        
-        # Display
-        DT::datatable(tbl1, options = list(ordering = F, searching = T, pageLength=20))
+        tbl1 <- data_tbl() %>% filter(adj_p_val < input$fdr_num)
+        DT::datatable(tbl1, options = list(ordering = T, searching = T, pageLength=20))
     })
     
-    # PE Analysis
-    output$ipath <- renderText({
+    # ipath
+    output$ipath_coverage <- renderText({
         req(input$file1)
-        tbl0 <- read_csv(input$file1$datapath)
+        req(input$grp_numerator)
+        req(input$grp_denominator)
+        req(input$species_code)
         
-        group.name.col <- names(tbl0[,2])
-        groupnames <- as.vector(unlist(unique(tbl0[[group.name.col]])))
-        control.group.name <- "Plus" # name of denominator group. 
-        alpha <- input$fdr_num
-        kegg_species_id <- "dme"
-        
-        #  ==================== START ==================== 
-        cnames <- colnames(tbl0)[3:length(colnames(tbl0))]
-        # Init vec of t.stats p-vals, and fold change of averages
-        # Compute t-stats
-        p.vals.ls <- vector(mode="numeric", length = length(cnames))
-        fc.ls <- vector(mode="numeric", length = length(cnames))
-        for (i in 1:length(cnames)) {
-            g1.vec <- as.vector(unlist(tbl0 %>% filter(!!sym(group.name.col)==groupnames[1]) %>% select(cnames[i])))
-            g2.vec <- as.vector(unlist(tbl0 %>% filter(!!sym(group.name.col)==groupnames[2]) %>% select(cnames[i])))
-            x <- t.test(g1.vec, g2.vec)
-            p.vals.ls[i] <- x$p.value
-            
-            mu1 <- mean(g1.vec)
-            mu2 <- mean(g2.vec)
-            fc.ls[i] <- mu1/mu2
-        }
-        names(p.vals.ls) <- colnames(tbl0)[3:length(colnames(tbl0))]
-        names(fc.ls) <- colnames(tbl0)[3:length(colnames(tbl0))]
-        
-        # adjust: BH correction
-        # pick out names where p < alpha
-        p.vals.ls <- p.adjust(p.vals.ls, method = "hochberg", n = length(p.vals.ls))
-        significant.metabs <- c()
-        for (nm in names(p.vals.ls)) {
-            if (p.vals.ls[[nm]] < alpha) {
-                significant.metabs <- c(significant.metabs, nm)
-            }
-        }
-        print(paste0(length(significant.metabs), " significant metabolites found at alpha = ", alpha))
-        
-        # Filter for significant metabs
-        p.vals.ls2 <- p.vals.ls[significant.metabs]
-        fc.ls2 <- fc.ls[significant.metabs]
-        
-        # Colour by FC
-        th.lower <- 0.8
-        th.upper <- 1.2
-        fc.colour.ls <- rep("#000000", length(significant.metabs))
-        names(fc.colour.ls) <- significant.metabs
-        for (i in 1:length(significant.metabs)) {
-            nm <- significant.metabs[i]
-            if (fc.ls[nm] <= th.lower) {
-                fc.colour.ls[i] <- "#e41a1c" #red
-            }
-            if (fc.ls[nm] > th.upper) {
-                fc.colour.ls[i] <- "#4daf4a" #green
-            }
-        }
-        print("check")
-        fc.tbl <- tibble::enframe(fc.ls2) %>% rename("fc"=value, "Sample"=name)
-        fc.colour.tbl <- tibble::enframe(fc.colour.ls) %>% rename("fc_colour"=value, "Sample"=name)
-        fc.tbl <- inner_join(fc.tbl, fc.colour.tbl, by="Sample")
-        p.val.tbl <- tibble::enframe(p.vals.ls2) %>% rename("FDR"=value, "Sample"=name)
-        
-        #  ==================== GET CPD IDS ==================== 
-        kegg.id.tbl <- lookup_chem_id(names(fc.ls2))
-        kegg.id.vec <- as.vector(unlist(kegg.id.tbl %>% select("KEGG")))
-        
-        tbl1 <- inner_join(fc.tbl, kegg.id.tbl, by="Sample")
-        tbl1 <- inner_join(tbl1, p.val.tbl, by="Sample") %>% select(Sample, fc, fc_colour, KEGG, FDR)
-        
-        #  ======================================== POST Calls to iPath API ========================================
-        # Make selection str
-        kegg.vec <- as.vector(unlist(kegg.id.tbl["KEGG"]))
-        names(kegg.vec) <- as.vector(unlist(kegg.id.tbl["Sample"]))
-        selection.str.ls <- c()
-        for (nm in names(kegg.vec)) {
-            selection.str.ls <- c(selection.str.ls, paste0(kegg.vec[nm], " W20 ", fc.colour.ls[nm]))
-        }
-        selection.str <- paste0(selection.str.ls, collapse = "\n")
+        tbl1 <- data_tbl() %>% filter(KEGG != "undef")
+        selection.str <- get_ipath_selection_str(tbl1, "Sample", "KEGG", "fc_colour", "W20")
         
         ## PARAMS
         highlight_path_width <- 10
@@ -279,8 +217,9 @@ server <- function(input, output, session) {
                      export_type="svg", 
                      default_opacity="0.7",
                      default_width="1",
-                     default_radius="5",
-                     whole_modules="0")
+                     default_radius="2",
+                     whole_modules="0", 
+                     tax_filter=input$species_code)
         #print("Making POST request where whole_module == 1...")
         r <- POST(url, body = body, encode = "form")
         print(http_status(r)$message)
@@ -294,7 +233,55 @@ server <- function(input, output, session) {
         xml_svg_string <- paste0(x0_text, collapse="\n")        
         c(xml_svg_string)
     })
+    
+    output$ipath_de_metabs <- renderText({
+        req(input$file1)
+        req(input$grp_numerator)
+        req(input$grp_denominator)
+        req(input$species_code)
+        
+        tbl0 <- read_csv(input$file1$datapath)
+        tbl2 <- get_results_tibble(tbl0, 
+                                   input_alpha=0.01, 
+                                   grp_numerator = input$grp_numerator,
+                                   grp_denominator = input$grp_denominator,
+                                   input$fdr_num)
+        
+        tbl2 <- tbl2 %>% filter(KEGG != "undef") %>% filter(adj_p_val < input$fdr_num)
+        selection.str2 <- get_ipath_selection_str(tbl2, "Sample", "KEGG", "fc_colour", "W20")
+        
+        ## PARAMS
+        highlight_path_width <- 10
+        highlight_path_opacity <- 0.3
+        module_ellipse_radius <- 5
+        
+        url <- "https://pathways.embl.de/mapping.cgi"
+        
+        # POST request to ipath where `whole_modules`=1
+        # This is the main file being modified
+        body <- list(selection = selection.str2,
+                     export_type="svg", 
+                     default_opacity="0.7",
+                     default_width="1",
+                     default_radius="2",
+                     whole_modules="0", 
+                     tax_filter=input$species_code)
+        #print("Making POST request where whole_module == 1...")
+        r <- POST(url, body = body, encode = "form")
+        print(http_status(r)$message)
+        xml_main <- content(r, "text")
+        #cat("check\n")
+        #outfile <- strsplit(xml_main, "\n")[[1]]
+        x0_text <- strsplit(xml_main, "\n")[[1]]
+        # Edit SVG total height and width
+        x0_text[3] <- gsub('2250', '450', x0_text[3])
+        x0_text[3] <- gsub('3774', '754.8', x0_text[3])
+        xml_svg_string <- paste0(x0_text, collapse="\n")        
+        c(xml_svg_string)
+        
+    })
 }
 
 # Run the app
 shinyApp(ui, server)
+
