@@ -62,3 +62,5 @@ httr
 XML
 DT
 ```
+### Contributors
+Don Teng and Veronica Lui
