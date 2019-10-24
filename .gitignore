@@ -6,3 +6,6 @@
 !about.html
 !dev-notes.md
 !helper-func.R
+!main.R
+!ui.R
+!server.R
