@@ -23,13 +23,14 @@ lorem ipsum
 ### To Do
 
  - split main.R into ui.R and server.R
+ - Try validated numeric input, with `numericInput`, instead of `sliderInput`
+ - implement row-wise median normalization
  - volcano plots, heatmaps, boxplots?
  - MetaboAnalystR pathway enrichment module?
- - Add species filter
+ - Add searchable species filter
  - Download all files button
- - sort significantly changing metabs by FC
- - Dropdown: which group is the denominator
- - ipath needs legend
+ - sort significantly changing metabs by FC, then p-value
+ - ipath needs legend, red for something, blue for something
  - add ipath:coverage and ipath:DE metabs
  - include ANOVA?
  - Check DE logic - is p-value input necessary, or only q-value?
