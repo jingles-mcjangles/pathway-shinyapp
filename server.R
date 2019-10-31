@@ -185,4 +185,5 @@ server <- function(input, output, session) {
         c(xml_svg_string)
         
     })
+    
 }
