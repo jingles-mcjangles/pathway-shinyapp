@@ -45,9 +45,7 @@ dash.body <- dashboardBody(
                         tabPanel("Significantly Changing Metabolites", 
                                  div(style = 'height:510px; overflow-y: scroll; overflow-x: scroll; font-size:75%', 
                                      dataTableOutput("de_tbl") %>% withSpinner()))
-                        )
                     ),
-                
                     box(width=4,
                         title="Boxplot", height = "400px",
                         selectizeInput('selected_colname', 'Select Metabolite', ""),
