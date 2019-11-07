@@ -1,3 +1,8 @@
+library("pacman")
+pacman::p_load("shiny", "shinydashboard", "shinycssloaders", "ggplot2", 
+               "MetaboAnalystR", "KEGGREST", "tidyverse", "ggfortify",
+               "httr", "XML", "DT")
+
 dash.sidebar <- dashboardSidebar(width = 320,
                                  # HTML tag for margin
                                  tags$style(HTML("#sidebar_margin {margin: 10px}")),

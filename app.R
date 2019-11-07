@@ -4,7 +4,7 @@ pacman::p_load("shiny", "shinydashboard", "shinycssloaders", "ggplot2",
                "httr", "XML", "DT")
 
 # set working directory
-setwd('./work/pathway-shinyapp/')
+#setwd('./pathway-shinyapp/')
 
 # source functions, ui.R and server.R files
 source("helper-func.R")
