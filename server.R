@@ -93,10 +93,24 @@ server <- function(input, output, session) {
     #})
     
     # DE metabolites
-    output$de_tbl <- renderDataTable({
-        tbl1 <- data_tbl() %>% filter(adj_p_val < input$fdr_num)
-        DT::datatable(tbl1, options = list(ordering = T, searching = T, pageLength=20))
+    de_tbl <- reactive({
+        data_tbl() %>% filter(adj_p_val < input$fdr_num)
     })
+    
+    output$de_tbl <- renderDataTable({
+        DT::datatable(de_tbl(), options = list(ordering = T, searching = T, pageLength=20))
+    })
+    
+    
+    ## download DE metabolites as .csv file
+    output$downloadData <- downloadHandler(
+        filename = function() {
+            paste("significantly_changed_metabolites", ".csv", sep = "")
+        },
+        content = function(file) {
+            write.csv(de_tbl(), file, row.names = FALSE)
+        }
+    )
     
     # ipath
     output$ipath_coverage <- renderText({
