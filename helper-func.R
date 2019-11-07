@@ -185,6 +185,47 @@ get_ipath_selection_str <- function(tbl, metab_name_colname, kegg_colname, fc_co
 }
 
 
+call_maca_pw_analysis <- function(fn_auc_csv, kegg_species_id) {
+    "Calls the pathway enrichment analysis module from MetaboAnalystR. 
+    Does row-wise median-normalization and log-transforms the data.
+    P-values of pathway enrichment are calculated using the `globaltest` algorithm, and pathway impact scores
+    computed using the pathway centrality option. But impact should be disregarded as an overly-abstract
+    graph theoretic notion that doesn't necessarily have any biological relevance. 
+
+    PARAMS
+    ------
+    fn_auc_csv: str; filename of input run summary table as a csv file, with AUCs as values. 
+    rownames are the sample names, column names are the metabolite names. Column 1 are the 
+    experimental groupings. Because of the way this module works, only 2 groups are supported.
+
+    RETURNS
+    -------
+    list of two outputs:
+    tbl.out: output tibble of pathway analysis enrichment. columns:
+        metabolite (compound common name), total cmpd, Hits, raw p (raw p value), -log p, 
+        Holm adjust(ed p value), FDR, Impact. 
+    pw.dict: named list of lists; each key is the pathway ID, and each value is a list of 
+        compounds from the input data which appear in that particular pathway. 
+    "
+
+    mSet<-InitDataObjects("conc", "pathqea", FALSE)
+    mSet<-Read.TextData(mSet, fn_auc_csv, "rowu", "disc");
+    mSet<-CrossReferencing(mSet, "name");
+    mSet<-CreateMappingResultTable(mSet)
+    mSet<-SanityCheckData(mSet)
+    mSet<-ReplaceMin(mSet);
+    mSet<-PreparePrenormData(mSet)
+    mSet<-Normalization(mSet, "MedianNorm", "LogNorm", "NULL", ratio=FALSE, ratioNum=20)
+    mSet<-SetKEGG.PathLib(mSet, kegg_species_id)
+    mSet<-SetMetabolomeFilter(mSet, F);
+    mSet<-CalculateQeaScore(mSet, "rbc", "gt")
+
+    tbl.out <- as_tibble(mSet$analSet$qea.mat, rownames="pw_name")
+    pw.dict <- mSet$analSet$qea.hits
+
+    return(list(tbl.out, pw.dict))
+}
+
 # This used to be in output$ipath
 # Due for deletion soon
 

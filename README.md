@@ -22,7 +22,6 @@ lorem ipsum
 
 ### To Do
 
- - split main.R into ui.R and server.R
  - Try validated numeric input, with `numericInput`, instead of `sliderInput`
  - implement row-wise median normalization
  - volcano plots, heatmaps, boxplots?
