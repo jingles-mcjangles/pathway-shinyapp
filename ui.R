@@ -1,5 +1,8 @@
 dash.sidebar <- dashboardSidebar(width = 320,
-                                 sidebarMenu(id="sidebarmenu", startExpanded=T,
+                                 # HTML tag for margin
+                                 tags$style(HTML("#sidebar_margin {margin: 10px}")),
+                                 
+                                 sidebarMenu(id="sidebarmenu", startExpanded=T, 
                                              menuItem("Home", tabName="main", icon = icon("home")),
                                              fileInput("file1", "Upload CSV File",
                                                        accept = c("text/csv", "text/comma-separated-values,text/plain",".csv")),
@@ -8,7 +11,7 @@ dash.sidebar <- dashboardSidebar(width = 320,
                                              selectizeInput('grp_denominator', 'Select group2 (FC denominator)', ""),
                                              textInput("species_code", "KEGG 3-letter Species Code"),
                                              
-                                             menuItem("Advanced Options", tabName="options", 
+                                             menuItem("Advanced Options", tabName="options",
                                                       sliderInput("alpha", "Alpha for t-tests", min=0, max=1.0, step=0.01, value=0.01, width = '95%'),
                                                       sliderInput("fc", "Fold Change Threshold", min=0, max=1.0, step=0.05, value=0.2, width = '95%'),
                                                       checkboxInput("median_normalization","Use median normalization",TRUE),
@@ -20,7 +23,7 @@ dash.sidebar <- dashboardSidebar(width = 320,
                                              menuItem("Help", tabName="help", icon = icon("info-circle")),
                                              menuItem("About", tabName="about", icon = icon("info-circle")),
                                              tags$hr(),
-                                             downloadButton("downloadData", "Download Analysis Files")
+                                             fluidRow(id = "sidebar_margin", downloadButton("downloadData", "Download Analysis Files"))
                                  )
 )
 
