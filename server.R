@@ -18,7 +18,7 @@ server <- function(input, output, session) {
     grp.name.vec <- reactive({
         req(input$file1)
         tbl0 <- read_csv(input$file1$datapath)
-        as.vector(unlist(tbl0[2]))
+        unique(as.vector(unlist(tbl0[2])))
     })
     
     outVar <- reactive({
