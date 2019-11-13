@@ -28,7 +28,8 @@ dash.sidebar <- dashboardSidebar(width = 320,
                                              menuItem("Help", tabName="help", icon = icon("info-circle")),
                                              menuItem("About", tabName="about", icon = icon("info-circle")),
                                              tags$hr(),
-                                             fluidRow(id = "sidebar_margin", downloadButton("downloadData", "Download Significantly Changed Metabolites"))
+                                             fluidRow(id = "sidebar_margin", downloadButton("downloadtables", "Download tables"))
+                                             # fluidRow(id = "sidebar_margin", downloadButton("downloadUnfound", "Download Unfound Metabolites"))
                                  )
 )
 

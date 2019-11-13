@@ -68,7 +68,7 @@ server <- function(input, output, session) {
     })
     
     # KEGGless compounds
-    output$unfound_table <- renderDataTable({
+    unfound_table <- reactive({
         req(input$file1)
         tbl0 <- read_csv(input$file1$datapath)
         
@@ -79,9 +79,13 @@ server <- function(input, output, session) {
         mSet<-CreateMappingResultTable(mSet)
         tmp <- as_tibble(mSet$dataSet$map.table) %>% mutate_each(funs(replace(., .=='', "NA")))
         unfound <- tmp %>% filter(KEGG=="NA") %>% select(Query)
-        DT::datatable(unfound)
-    })
+        unfound
+        })
     
+    output$unfound_table <- renderDataTable({
+        DT::datatable(unfound_table())
+    })
+
     # PCA plot
     #output$pca_plot <- renderPlot({
     #    req(input$file1)
@@ -100,17 +104,6 @@ server <- function(input, output, session) {
     output$de_tbl <- renderDataTable({
         DT::datatable(de_tbl(), options = list(ordering = T, searching = T, pageLength=20))
     })
-    
-    
-    ## download DE metabolites as .csv file
-    output$downloadData <- downloadHandler(
-        filename = function() {
-            paste("significantly_changed_metabolites", ".csv", sep = "")
-        },
-        content = function(file) {
-            write.csv(de_tbl(), file, row.names = FALSE)
-        }
-    )
     
     # ipath
     output$ipath_coverage <- renderText({
@@ -200,4 +193,23 @@ server <- function(input, output, session) {
         
     })
     
+    # download KEGGLESS compounds and DE metabolites
+    # - requires xlsx and rJava.
+    output$downloadtables <- downloadHandler(
+        filename <- function(){
+            paste("output", "xlsx", sep=".")
+            },
+        content <- function(file){
+            sheets <- list(de_tbl(), unfound_table())
+            sheetnames <- c('DE metabolites', 'KEGGless compounds')
+            wb <- createWorkbook()
+            
+            for(i in range(1,length(sheets))){
+                sheet <- createSheet(wb, sheetnames[i])
+                addDataFrame(sheets[i], sheet = sheet, startColumn = 1, row.names = FALSE)
+                }
+            saveWorkbook(wb, file)
+            }
+        )
 }
+        

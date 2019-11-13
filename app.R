@@ -1,10 +1,10 @@
 library("pacman")
 pacman::p_load("shiny", "shinydashboard", "shinycssloaders", "ggplot2", 
                "MetaboAnalystR", "KEGGREST", "tidyverse", "ggfortify",
-               "httr", "XML", "DT")
+               "httr", "XML", "DT", "xlsx", "rJava")
 
 # set working directory
-#setwd('./pathway-shinyapp/')
+setwd('./work/pathway-shinyapp/')
 
 # source functions, ui.R and server.R files
 source("helper-func.R")
