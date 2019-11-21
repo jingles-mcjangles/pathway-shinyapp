@@ -16,7 +16,7 @@ dash.sidebar <- dashboardSidebar(
     fileInput("file1", "Upload CSV File",
       accept = c("text/csv", "text/comma-separated-values,text/plain", ".csv")
     ),
-    sliderInput("fdr_num", "False Discovery Rate", min = 0, max = 1.0, step = 0.01, value = 0.05, width = "95%"),
+    numericInput("fdr_num", "False Discovery Rate", min = 0, max = 1.0, step = 0.01, value = 0.05, width = "95%"),
     selectizeInput("grp_numerator", "Select group1 (FC numerator)", ""),
     selectizeInput("grp_denominator", "Select group2 (FC denominator)", ""),
     textInput("species_code", "KEGG 3-letter Species Code"),
