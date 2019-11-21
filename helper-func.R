@@ -1,12 +1,14 @@
 library("pacman")
-pacman::p_load("shiny", "shinydashboard", "ggplot2", 
-               "MetaboAnalystR", "KEGGREST", "tidyverse", "ggfortify",
-               "httr", "RColorBrewer", "XML", 
-               "methods", "rvest", "data.table", "DT")
+pacman::p_load(
+  "shiny", "shinydashboard", "ggplot2",
+  "MetaboAnalystR", "KEGGREST", "tidyverse", "ggfortify",
+  "httr", "RColorBrewer", "XML",
+  "methods", "rvest", "data.table", "DT"
+)
 
 
 lookup_chem_id <- function(cpd_names_vec) {
-    "Look up various IDs on KEGG, through MetaboAnalystR.
+  "Look up various IDs on KEGG, through MetaboAnalystR.
     Keeps only KEGG and HMDB IDs.
     Requirements: MetaboAnalystR
     
@@ -18,57 +20,57 @@ lookup_chem_id <- function(cpd_names_vec) {
     -------
     cpd_names_tbl: tibble of IDs.
     "
-    # Call to Kegg
-    mset <- InitDataObjects("NA", "utils", FALSE)
-    mset <- Setup.MapData(mset, cpd_names_vec)
-    mset <- CrossReferencing(mset, "name", T, T, T, T, T)
-    mset <- CreateMappingResultTable(mset)
-    
-    # print warnings
-    print(mset$msgset$nmcheck.msg[2])
-    cpd_names_tbl <- as_tibble(mset$dataSet$map.table)
-    cpd_names_tbl <- cpd_names_tbl %>% rename("Sample"="Query")
-    cpd_names_tbl <- cpd_names_tbl %>% select("Sample", "KEGG", "HMDB")
+  # Call to Kegg
+  mset <- InitDataObjects("NA", "utils", FALSE)
+  mset <- Setup.MapData(mset, cpd_names_vec)
+  mset <- CrossReferencing(mset, "name", T, T, T, T, T)
+  mset <- CreateMappingResultTable(mset)
 
-    # replace NA, string "NA", or empty cell with string "undef"
-    cpd_names_tbl[cpd_names_tbl == ""] <- "undef"
-	cpd_names_tbl[cpd_names_tbl == "NA"] <- "undef"
-	cpd_names_tbl <- cpd_names_tbl %>% replace(., is.na(.), "undef")
-    
-    return(cpd_names_tbl)
+  # print warnings
+  print(mset$msgset$nmcheck.msg[2])
+  cpd_names_tbl <- as_tibble(mset$dataSet$map.table)
+  cpd_names_tbl <- cpd_names_tbl %>% rename("Sample" = "Query")
+  cpd_names_tbl <- cpd_names_tbl %>% select("Sample", "KEGG", "HMDB")
+
+  # replace NA, string "NA", or empty cell with string "undef"
+  cpd_names_tbl[cpd_names_tbl == ""] <- "undef"
+  cpd_names_tbl[cpd_names_tbl == "NA"] <- "undef"
+  cpd_names_tbl <- cpd_names_tbl %>% replace(., is.na(.), "undef")
+
+  return(cpd_names_tbl)
 }
 
 
 clean_and_transform_tibble <- function(tbl, log_bool, z_transform_bool) {
-	"Origrinal clean_and_transform function.  
+  "Origrinal clean_and_transform function.  
 	"
-    # replace NA with zero
-    tbl <- tbl %>% replace(., is.na(.), 0)
-    
-    # Replace 0 with half of smallest nonzero value
-    metab_names <- colnames(tbl)[3:length(colnames(tbl))]
-    min.nonzero.val <- sort(unique(as.vector(as.matrix(tbl %>% select(metab_names)))))[2]/2
-    tbl[tbl == 0] <- min.nonzero.val
-    
-    # Take log (ugh), transforming in-place
-    if (log_bool) {
-        for (nm in metab_names) {
-            tbl[nm] <- log2(unlist(tbl[nm]))
-        }
+  # replace NA with zero
+  tbl <- tbl %>% replace(., is.na(.), 0)
+
+  # Replace 0 with half of smallest nonzero value
+  metab_names <- colnames(tbl)[3:length(colnames(tbl))]
+  min.nonzero.val <- sort(unique(as.vector(as.matrix(tbl %>% select(metab_names)))))[2] / 2
+  tbl[tbl == 0] <- min.nonzero.val
+
+  # Take log (ugh), transforming in-place
+  if (log_bool) {
+    for (nm in metab_names) {
+      tbl[nm] <- log2(unlist(tbl[nm]))
     }
-    # Do z-transform
-    if (z_transform_bool) {
-        for (nm in metab_names) {
-            tmp <- unlist(tbl[nm])
-            tbl[nm] <- (tmp - mean(tmp))/sd(tmp)
-        }
+  }
+  # Do z-transform
+  if (z_transform_bool) {
+    for (nm in metab_names) {
+      tmp <- unlist(tbl[nm])
+      tbl[nm] <- (tmp - mean(tmp)) / sd(tmp)
     }
-    return(tbl)
+  }
+  return(tbl)
 }
 
 
 get_results_tibble <- function(tbl, input_alpha, grp_numerator, grp_denominator, input_fdr) {
-	"Takes a tibble of cleaned, transformed (if necessary) values as input, and does:
+  "Takes a tibble of cleaned, transformed (if necessary) values as input, and does:
 	1. t-tests at input_alpha
 	2. BH correction at input_fdr
 	3. Computes FC of averages
@@ -97,63 +99,63 @@ get_results_tibble <- function(tbl, input_alpha, grp_numerator, grp_denominator,
     -----
      * Unknown KEGG and HMDB Ids get replaced with string `undef`. 
 	"
-    group.name.col <- names(tbl[,2])
-    metab_names <- colnames(tbl)[3:length(colnames(tbl))]
-    # Init vec of t.stats p-vals, and FCs
-    # Compute t-stats
-    p.vals.ls <- vector(mode="numeric", length = length(metab_names))
-    fc.ls <- vector(mode="numeric", length = length(metab_names))
-    for (i in 1:length(metab_names)) {
-        g1.vec <- as.vector(unlist(tbl %>% filter(!!sym(group.name.col)==grp_numerator) %>% select(metab_names[i])))
-        g2.vec <- as.vector(unlist(tbl %>% filter(!!sym(group.name.col)==grp_denominator) %>% select(metab_names[i])))
+  group.name.col <- names(tbl[, 2])
+  metab_names <- colnames(tbl)[3:length(colnames(tbl))]
+  # Init vec of t.stats p-vals, and FCs
+  # Compute t-stats
+  p.vals.ls <- vector(mode = "numeric", length = length(metab_names))
+  fc.ls <- vector(mode = "numeric", length = length(metab_names))
+  for (i in 1:length(metab_names)) {
+    g1.vec <- as.vector(unlist(tbl %>% filter(!!sym(group.name.col) == grp_numerator) %>% select(metab_names[i])))
+    g2.vec <- as.vector(unlist(tbl %>% filter(!!sym(group.name.col) == grp_denominator) %>% select(metab_names[i])))
 
-        x <- t.test(g1.vec, g2.vec, conf.level=1-input_alpha)
-        p.vals.ls[i] <- x$p.value
+    x <- t.test(g1.vec, g2.vec, conf.level = 1 - input_alpha)
+    p.vals.ls[i] <- x$p.value
 
-        mu1 <- mean(g1.vec)
-        mu2 <- mean(g2.vec)
-        fc.ls[i] <- mu1/mu2
+    mu1 <- mean(g1.vec)
+    mu2 <- mean(g2.vec)
+    fc.ls[i] <- mu1 / mu2
+  }
+
+
+  names(p.vals.ls) <- metab_names
+  names(fc.ls) <- metab_names
+
+  # adjust: BH correction
+  adj.p.vals.ls <- p.adjust(p.vals.ls, method = "hochberg", n = length(p.vals.ls))
+
+  # Compute ipath colours: non-significant, FC-up, FC-down, FC-neutral
+  fc.colour.ls <- rep("#ACACAC", ncol(tbl)) # default gray (non-significant)
+  names(fc.colour.ls) <- metab_names
+  for (nm in metab_names) {
+    if (adj.p.vals.ls[nm] < input_fdr) {
+      if (fc.ls[nm] > 1.2) {
+        fc.colour.ls[nm] <- "#0571b0" # blue
+      } else if (fc.ls[nm] < 0.8) {
+        fc.colour.ls[nm] <- "#ca0020" # red
+      } else {
+        fc.colour.ls[nm] <- "#FFFFFF" # black
+      }
     }
-    
+  }
 
-    names(p.vals.ls) <- metab_names
-    names(fc.ls) <- metab_names
+  # Get all KEGG IDs
+  chem.id.tbl <- lookup_chem_id(metab_names)
+  kegg.id.vec <- as.vector(unlist(chem.id.tbl %>% select("KEGG")))
 
-    # adjust: BH correction
-    adj.p.vals.ls <- p.adjust(p.vals.ls, method = "hochberg", n = length(p.vals.ls))
+  # enframe and merge all named lists
+  fc.tbl <- tibble::enframe(fc.ls) %>% rename("fc" = value, "Sample" = name)
+  p.val.tbl <- tibble::enframe(p.vals.ls) %>% rename("raw_p_val" = value, "Sample" = name)
+  adj.p.val.tbl <- tibble::enframe(adj.p.vals.ls) %>% rename("adj_p_val" = value, "Sample" = name)
+  fc.colour.tbl <- tibble::enframe(fc.colour.ls) %>% rename("fc_colour" = value, "Sample" = name)
+  tbl <- list(fc.tbl, chem.id.tbl, p.val.tbl, adj.p.val.tbl, fc.colour.tbl) %>% reduce(inner_join, by = "Sample")
 
-    # Compute ipath colours: non-significant, FC-up, FC-down, FC-neutral
-    fc.colour.ls <- rep("#ACACAC", ncol(tbl)) # default gray (non-significant)
-    names(fc.colour.ls) <- metab_names
-    for (nm in metab_names) {
-        if (adj.p.vals.ls[nm] < input_fdr) {
-            if (fc.ls[nm] > 1.2) {
-                fc.colour.ls[nm] <- "#0571b0" #blue
-            } else if (fc.ls[nm] < 0.8) {
-                fc.colour.ls[nm] <- "#ca0020" #red
-            } else {
-                fc.colour.ls[nm] <- "#FFFFFF" #black
-            }
-        }
-    }
-
-    # Get all KEGG IDs
-    chem.id.tbl <- lookup_chem_id(metab_names)
-    kegg.id.vec <- as.vector(unlist(chem.id.tbl %>% select("KEGG")))
-    
-    # enframe and merge all named lists
-    fc.tbl <- tibble::enframe(fc.ls) %>% rename("fc"=value, "Sample"=name)
-    p.val.tbl <- tibble::enframe(p.vals.ls) %>% rename("raw_p_val"=value, "Sample"=name)
-    adj.p.val.tbl <- tibble::enframe(adj.p.vals.ls) %>% rename("adj_p_val"=value, "Sample"=name)
-    fc.colour.tbl <- tibble::enframe(fc.colour.ls) %>% rename("fc_colour"=value, "Sample"=name)
-    tbl <- list(fc.tbl, chem.id.tbl, p.val.tbl, adj.p.val.tbl, fc.colour.tbl) %>% reduce(inner_join, by = "Sample")
-    
-    return(tbl)
+  return(tbl)
 }
 
 
 get_ipath_selection_str <- function(tbl, metab_name_colname, kegg_colname, fc_colour_colname, node_width_text) {
-    "Get the ipath selection string from an input tibble. Usually goes after get_results_tibble() after the appropriate 
+  "Get the ipath selection string from an input tibble. Usually goes after get_results_tibble() after the appropriate 
     filter()-ing or select()-ing. 
 
     PARAMS
@@ -169,24 +171,24 @@ get_ipath_selection_str <- function(tbl, metab_name_colname, kegg_colname, fc_co
     selection_str
     "
 
-    # Extract columns as named lists, named by metab names
-    kegg.vec <- as.vector(unlist(tbl[kegg_colname]))
-    names(kegg.vec) <- as.vector(unlist(tbl[metab_name_colname]))
-    fc.colour.ls <- as.vector(unlist(tbl[fc_colour_colname]))
-    names(fc.colour.ls) <- as.vector(unlist(tbl[metab_name_colname]))
+  # Extract columns as named lists, named by metab names
+  kegg.vec <- as.vector(unlist(tbl[kegg_colname]))
+  names(kegg.vec) <- as.vector(unlist(tbl[metab_name_colname]))
+  fc.colour.ls <- as.vector(unlist(tbl[fc_colour_colname]))
+  names(fc.colour.ls) <- as.vector(unlist(tbl[metab_name_colname]))
 
-    selection_str_ls <- c()
-    for (nm in names(kegg.vec)) {
-        selection_str_ls <- c(selection_str_ls, paste(kegg.vec[nm], node_width_text, fc.colour.ls[nm], sep=" "))
-    }
+  selection_str_ls <- c()
+  for (nm in names(kegg.vec)) {
+    selection_str_ls <- c(selection_str_ls, paste(kegg.vec[nm], node_width_text, fc.colour.ls[nm], sep = " "))
+  }
 
-    selection_str <- paste0(selection_str_ls, collapse = "\n")
-    return(selection_str)
+  selection_str <- paste0(selection_str_ls, collapse = "\n")
+  return(selection_str)
 }
 
 
 call_maca_pw_analysis <- function(fn_auc_csv, kegg_species_id) {
-    "Calls the pathway enrichment analysis module from MetaboAnalystR. 
+  "Calls the pathway enrichment analysis module from MetaboAnalystR. 
     Does row-wise median-normalization and log-transforms the data.
     P-values of pathway enrichment are calculated using the `globaltest` algorithm, and pathway impact scores
     computed using the pathway centrality option. But impact should be disregarded as an overly-abstract
@@ -208,22 +210,22 @@ call_maca_pw_analysis <- function(fn_auc_csv, kegg_species_id) {
         compounds from the input data which appear in that particular pathway. 
     "
 
-    mSet<-InitDataObjects("conc", "pathqea", FALSE)
-    mSet<-Read.TextData(mSet, fn_auc_csv, "rowu", "disc");
-    mSet<-CrossReferencing(mSet, "name");
-    mSet<-CreateMappingResultTable(mSet)
-    mSet<-SanityCheckData(mSet)
-    mSet<-ReplaceMin(mSet);
-    mSet<-PreparePrenormData(mSet)
-    mSet<-Normalization(mSet, "MedianNorm", "LogNorm", "NULL", ratio=FALSE, ratioNum=20)
-    mSet<-SetKEGG.PathLib(mSet, kegg_species_id)
-    mSet<-SetMetabolomeFilter(mSet, F);
-    mSet<-CalculateQeaScore(mSet, "rbc", "gt")
+  mSet <- InitDataObjects("conc", "pathqea", FALSE)
+  mSet <- Read.TextData(mSet, fn_auc_csv, "rowu", "disc")
+  mSet <- CrossReferencing(mSet, "name")
+  mSet <- CreateMappingResultTable(mSet)
+  mSet <- SanityCheckData(mSet)
+  mSet <- ReplaceMin(mSet)
+  mSet <- PreparePrenormData(mSet)
+  mSet <- Normalization(mSet, "MedianNorm", "LogNorm", "NULL", ratio = FALSE, ratioNum = 20)
+  mSet <- SetKEGG.PathLib(mSet, kegg_species_id)
+  mSet <- SetMetabolomeFilter(mSet, F)
+  mSet <- CalculateQeaScore(mSet, "rbc", "gt")
 
-    tbl.out <- as_tibble(mSet$analSet$qea.mat, rownames="pw_name")
-    pw.dict <- mSet$analSet$qea.hits
+  tbl.out <- as_tibble(mSet$analSet$qea.mat, rownames = "pw_name")
+  pw.dict <- mSet$analSet$qea.hits
 
-    return(list(tbl.out, pw.dict))
+  return(list(tbl.out, pw.dict))
 }
 
 # This used to be in output$ipath
